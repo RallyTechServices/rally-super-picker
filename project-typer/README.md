@@ -1,5 +1,10 @@
 #Project Typer
 
+## Description
+
+This app allows you to assign a type to the projects.  The type is saved as a preference 
+associated with the project chosen.  The preferences are used by the super picker for display.
+
 ## Development Notes
 
 ### First Load

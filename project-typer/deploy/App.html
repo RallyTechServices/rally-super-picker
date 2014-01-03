@@ -3,11 +3,11 @@
 <head>
     <title>Project Typer</title>
     <!--  (c) 2013 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Fri Jan 03 2014 08:33:18 GMT-0800 (PST) -->
+    <!--  Build Date: Fri Jan 03 2014 11:21:01 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Fri Jan 03 2014 08:33:18 GMT-0800 (PST)";
-        var CHECKSUM = 1065951414;
+        var APP_BUILD_DATE = "Fri Jan 03 2014 11:21:01 GMT-0800 (PST)";
+        var CHECKSUM = 1694823794;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -140,14 +140,66 @@ Ext.define('Rally.technicalservices.Logger',{
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
-
+    key: 'rally.techservices.projecttype',
     logger: new Rally.technicalservices.Logger(),
     items: [
-        {xtype:'container',itemId:'message_box',tpl:'Hello, <tpl>{_refObjectName}</tpl>'},
+        {xtype:'container', padding: 5, margin: 5, itemId:'tree_box'},
         {xtype:'tsinfolink'}
     ],
     launch: function() {
-        this.down('#message_box').update(this.getContext().getUser());
+        var me = this;
+        Deft.Chain.pipeline([this._getProjects,this._getProjectTypes,this._displayProjects],this);
+    },
+    _getProjects: function() {
+        var deferred = Ext.create('Deft.Deferred');
+        Ext.create('Rally.data.wsapi.Store',{
+            model:'Project',
+            autoLoad: true,
+            fetch:['ObjectID','Children','Name'],
+            listeners: {
+                load: function(store,projects) {
+                    var leaf_projects = [];
+                    Ext.Array.each(projects,function(project){
+                        if ( project.get('Children').Count == 0 ) {
+                            leaf_projects.push(project);
+                        }
+                    });
+                    deferred.resolve(leaf_projects);
+                }
+            }
+        });
+        return deferred.promise;
+    },
+    _getProjectTypes: function(projects){
+        Ext.Array.each(projects,function(project){
+            project.set("_credittype","None");
+        });
+        return projects;
+    },
+    _displayProjects: function(projects){
+        var me = this;
+        var data = [];
+        Ext.Array.each(projects, function(project) {
+            data.push(project); 
+        });
+        
+        var store = Ext.create('Rally.data.custom.Store',{
+            data:data
+        });
+            
+        this.logger.log(store);
+        
+        this.down('#tree_box').add({
+            xtype:'rallygrid',
+            store: store
+        });
+    },
+    _hashToArray: function(hash) {
+        var collapsed_array = [];
+        Ext.Object.each(hash,function(key,value){
+            collapsed_array.push(value);
+        });
+        return collapsed_array;
     }
 });
 
