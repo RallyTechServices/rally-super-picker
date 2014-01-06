@@ -3,11 +3,11 @@
 <head>
     <title>Project Typer</title>
     <!--  (c) 2013 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Fri Jan 03 2014 11:21:01 GMT-0800 (PST) -->
+    <!--  Build Date: Sun Jan 05 2014 16:22:34 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Fri Jan 03 2014 11:21:01 GMT-0800 (PST)";
-        var CHECKSUM = 1694823794;
+        var APP_BUILD_DATE = "Sun Jan 05 2014 16:22:34 GMT-0800 (PST)";
+        var CHECKSUM = 2519768161;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -171,10 +171,34 @@ Ext.define('CustomApp', {
         return deferred.promise;
     },
     _getProjectTypes: function(projects){
+        var me = this;
+        var deferred = Ext.create('Deft.Deferred');
+        var project_hash = {}; // key will be oid
         Ext.Array.each(projects,function(project){
             project.set("_credittype","None");
+            project_hash[project.get('ObjectID')] = project;
         });
-        return projects;
+        
+        Ext.create('Rally.data.wsapi.Store',{
+            model: 'Preference',
+            autoLoad: true,
+            filters: [{property:"Name",value:this.key}],
+            listeners:{
+                scope: this,
+                load: function(store,prefs) {
+                    this.logger.log(prefs);
+                    Ext.Array.each( prefs, function(pref){
+                        var pref_project_oid = pref.get('Project').ObjectID;
+                        if ( project_hash[pref_project_oid] ) {
+                            project_hash[pref_project_oid].set('_credittype',pref.get('Value'));
+                        }
+                    });
+                    deferred.resolve(projects);
+                }
+            }
+        });
+        
+        return deferred.promise;
     },
     _displayProjects: function(projects){
         var me = this;
@@ -186,20 +210,41 @@ Ext.define('CustomApp', {
         var store = Ext.create('Rally.data.custom.Store',{
             data:data
         });
-            
-        this.logger.log(store);
+                    
+        var typebox = this._getTypeBox();
         
         this.down('#tree_box').add({
             xtype:'rallygrid',
-            store: store
+            store: store,
+            showRowActionsColumn: false,
+            columnCfgs: [
+                { text: 'Project', dataIndex: 'Name' },
+                { text: 'Type', dataIndex: '_credittype', editor: typebox  }
+            ],
+            listeners: {
+                scope: this,
+                edit: function(editor,e) {
+                    this._setTypePreference(e.record,e.value);
+                }
+            }
         });
     },
-    _hashToArray: function(hash) {
-        var collapsed_array = [];
-        Ext.Object.each(hash,function(key,value){
-            collapsed_array.push(value);
+    _getTypeBox: function() {
+        return Ext.create('Rally.ui.combobox.ComboBox',{
+            store: ['None','No Credit','Credit']
         });
-        return collapsed_array;
+    },
+    _setTypePreference: function(project,type) {
+        var settings = {};
+        settings[this.key] = type;
+        Rally.data.PreferenceManager.update({
+            project: project,
+            filterByUser: false,
+            settings: settings,
+            success: function(updatedRecords, notUpdatedRecords) {
+                //yay!
+            }
+        });
     }
 });
 
