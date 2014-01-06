@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Super Picker</title>
+    <!--  (c) 2013 Rally Software Development Corp.  All Rights Reserved. -->
+    <!--  Build Date: Fri Jan 03 2014 16:51:52 GMT-0800 (PST) -->
+    
+    <script type="text/javascript">
+        var APP_BUILD_DATE = "Fri Jan 03 2014 16:51:52 GMT-0800 (PST)";
+        var CHECKSUM = 4765786646;
+    </script>
+    
+    <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function() {
+             
+/**
+ * A link that pops up a version dialog box
+ */
+
+Ext.define('Rally.technicalservices.InfoLink',{
+    extend: 'Ext.Component',
+    alias: 'widget.tsinfolink',
+    
+    /**
+     * @cfg {String} informationHtml
+     * Additional text to be displayed on the popup dialog (for exmaple,
+     * to add a description of the app's use or functionality)
+     */
+    informationHtml: null,
+    
+    /**
+     * 
+     * cfg {String} title
+     * The title for the dialog box
+     */
+     title: "Information",
+    
+    renderTpl: "<div id='{id}-infolinkWrap' class='tsinfolink'>TS</div>",
+
+    initComponent: function() {
+        this.callParent(arguments);
+       
+    },
+    
+    onRender: function() {
+        this.callParent(arguments);
+        this.mon(this.el,'click',this.onClick,this);
+    },
+    _generateChecksum: function(string){
+        var chk = 0x12345678,
+            i;
+        string = string.replace(/var CHECKSUM = .*;/,"");
+        
+        for (i = 0; i < string.length; i++) {
+            chk += (string.charCodeAt(i) * i);
+        }
+    
+        return chk;
+    },
+    _checkChecksum: function(container) {
+        var me = this;
+        Ext.Ajax.request({
+            url: document.URL,
+            params: {
+                id: 1
+            },
+            success: function (response) {
+                text = response.responseText;
+                if ( CHECKSUM ) {
+                    if ( CHECKSUM !== me._generateChecksum(text) ) {
+                        console.log("Checksums don't match!");
+                        if ( me.dialog ) {
+                            me.dialog.add({xtype:'container',html:'Checksums do not match'});
+                        }
+                    }
+                }
+            }
+        });
+    },
+    onClick: function(e) {
+        var me = this;
+        this._checkChecksum(this);
+        
+        var dialog_items = [];
+        
+        if ( this.informationHtml ) {
+            dialog_items.push({
+                xtype:'container',
+                html: this.informationHtml
+            });
+        }
+                
+        dialog_items.push({
+            xtype:'container',
+            html:"This app was created by the Rally Technical Services Team."
+        });
+        
+        if ( APP_BUILD_DATE ) {
+            dialog_items.push({
+                xtype:'container',
+                html:'Build date/time: ' + APP_BUILD_DATE
+            });
+        }
+        
+        if (this.dialog){this.dialog.destroy();}
+        this.dialog = Ext.create('Rally.ui.dialog.Dialog',{
+            defaults: { padding: 5, margin: 5 },
+            closable: true,
+            draggable: true,
+            title: me.title,
+            items: dialog_items
+        });
+        this.dialog.show();
+    }
+});
+
+/*
+ */
+Ext.define('Rally.technicalservices.Logger',{
+    constructor: function(config){
+        Ext.apply(this,config);
+    },
+    log: function(args){
+        var timestamp = "[ " + Ext.util.Format.date(new Date(), "Y-m-d H:i:s.u") + " ]";
+        //var output_args = arguments;
+        //output_args.unshift( [ "[ " + timestamp + " ]" ] );
+        //output_args = Ext.Array.push(output_args,arguments);
+        
+        var output_args = [];
+        output_args = Ext.Array.push(output_args,[timestamp]);
+        output_args = Ext.Array.push(output_args, Ext.Array.slice(arguments,0));
+
+        window.console && console.log.apply(console,output_args);
+    }
+
+});
+
+Ext.define('CustomApp', {
+    extend: 'Rally.app.App',
+    componentCls: 'app',
+    type_key: 'rally.techservices.projecttype',
+    setting_key: 'rally.techservices.projectselection',
+    logger: new Rally.technicalservices.Logger(),
+    items: [
+        {xtype:'container',itemId:'outer_box', defaults: { margin: 5, padding: 5 }, layout: 'hbox', items: [
+            {xtype:'container',itemId:'source_box', height: 400, width: 150},
+            {xtype:'container',itemId:'target_box', height: 400, width: 150}
+        ]},
+        {xtype:'tsinfolink'}
+    ],
+    launch: function() {
+        var me = this;
+        Deft.Chain.pipeline([this._getProjects,this._getProjectTypes,this._getExistingSettings,this._displayProjects],this);
+    },
+    _getProjects: function() {
+        var deferred = Ext.create('Deft.Deferred');
+        Ext.create('Rally.data.wsapi.Store',{
+            model:'Project',
+            autoLoad: true,
+            fetch:['ObjectID','Children','Name'],
+            listeners: {
+                load: function(store,projects) {
+                    var leaf_projects = [];
+                    Ext.Array.each(projects,function(project){
+                        if ( project.get('Children').Count == 0 ) {
+                            leaf_projects.push(project);
+                        }
+                    });
+                    deferred.resolve(leaf_projects);
+                }
+            }
+        });
+        return deferred.promise;
+    },
+    _getProjectTypes: function(projects){
+        var me = this;
+        var deferred = Ext.create('Deft.Deferred');
+        var project_hash = {}; // key will be oid
+        var filtered_projects = [];
+        Ext.Array.each(projects,function(project){
+            project.set("_credittype","None");
+            project_hash[project.get('ObjectID')] = project;
+        });
+        
+        Ext.create('Rally.data.wsapi.Store',{
+            model: 'Preference',
+            autoLoad: true,
+            filters: [{property:"Name",value:this.type_key}],
+            listeners:{
+                scope: this,
+                load: function(store,prefs) {
+                    Ext.Array.each( prefs, function(pref){
+                        var pref_project_oid = pref.get('Project').ObjectID;
+                        if ( project_hash[pref_project_oid] ) {
+                            var project = project_hash[pref_project_oid];
+                            project.set('_credittype',pref.get('Value'));
+                            if ( pref.get('Value') !== "None" ) {
+                                filtered_projects.push(project);
+                            }
+                        }
+                    });
+                    deferred.resolve(filtered_projects);
+                }
+            }
+        });
+        
+        return deferred.promise;
+    },
+    _getExistingSettings: function(projects) {
+        var me = this;
+        var deferred = Ext.create('Deft.Deferred');
+        Rally.data.PreferenceManager.load({
+            appID: this.getAppId(),
+            filterByUser: false,
+            success: function(prefs) {
+                var selected_oids = [];
+                if ( prefs[me.setting_key] ) {
+                    selected_oids = Ext.JSON.decode(prefs[me.setting_key]);
+                }
+                Ext.Array.each(projects,function(project){
+                    if ( Ext.Array.indexOf(selected_oids,project.get('ObjectID')) > -1 ) {
+                        project.set("_selected", true);
+                    } else { 
+                        project.set("_selected", false);
+                    }
+                });
+                deferred.resolve(projects);
+            }
+        });
+        return deferred.promise;
+    },
+    _displayProjects: function(projects){
+        var me = this;
+        this.project_set = [];
+        var source_data = [];
+        var target_data = [];
+        
+        Ext.Array.each(projects, function(project) {
+            me.project_set.push(project);
+            if ( project.get('_selected') ) {
+                target_data.push(project);
+            } else {
+                source_data.push(project);
+            }
+        });
+        
+
+        
+        var source_store = Ext.create('Rally.data.custom.Store',{
+            groupField: '_credittype',
+            data:source_data
+        });
+        
+        var target_store = Ext.create('Rally.data.custom.Store',{
+            data:target_data
+        });   
+        
+        this.down('#target_box').add({
+            xtype:'rallygrid',
+            store: target_store,
+            showRowActionsColumn: false,
+            showPagingToolbar: false,
+            columnCfgs: [
+                { text: 'Selected Projects', dataIndex: 'Name' }
+            ],
+            viewConfig: {
+                plugins: {
+                    ptype: 'gridviewdragdrop',
+                    dragGroup: 'firstGridDDGroup',
+                    dropGroup: 'secondGridDDGroup'
+                },
+                listeners: {
+                    drop: function(node, data, dropRec, dropPosition) {
+                        //var dropOn = dropRec ? ' ' + dropPosition + ' ' + dropRec.get('Name') : ' on empty view';
+                        //alert( 'Dropped ' + data.records[0].get('Name') + dropOn);
+                        me._setSelected(data.records[0], true);
+                    }
+                }
+            }
+        }); 
+        
+        this.down('#source_box').add({
+            xtype:'rallygrid',
+            store: source_store,
+            features: [{
+                ftype:'grouping',
+                groupHeaderTpl: '{name}'
+            }],
+            showRowActionsColumn: false,
+            showPagingToolbar: false,
+            columnCfgs: [
+                { text: 'Unelected Projects', dataIndex: 'Name' }
+            ],
+            viewConfig: {
+                plugins: {
+                    ptype: 'gridviewdragdrop',
+                    dragGroup: 'secondGridDDGroup',
+                    dropGroup: 'firstGridDDGroup'
+                },
+                listeners: {
+                    drop: function(node, data, dropRec, dropPosition) {
+                        me._setSelected(data.records[0], false);
+                    }
+                }
+            }
+        }); 
+    },
+    _setSelected: function(record,selected) {
+        var me = this;
+        record.set("_selected",selected);
+        
+        var selected_array = [];
+        Ext.Array.each(this.project_set, function(project){
+            if ( project.get('_selected') ) {
+                selected_array.push(project.get('ObjectID'));
+            }
+            me.logger.log(project.get('Name'),project.get('ObjectID'),project.get('_selected'));
+        });
+        
+        me.logger.log('--', selected_array);
+        
+        var settings = {};
+        settings[this.setting_key] = Ext.JSON.encode(selected_array);
+        Rally.data.PreferenceManager.update({
+            appID: this.getAppId(),
+            filterByUser: false,
+            settings: settings,
+            success: function(updatedRecords, notUpdatedRecords) {
+                //yay!
+            }
+        });
+    }
+});
+
+            
+               Rally.launchApp('CustomApp', {
+                   name: 'Super Picker'
+               });
+        });
+    </script>
+    
+    <style type="text/css">
+
+.app {
+}
+.tsinfolink {
+    position:absolute;
+    right:0px;
+    width:5%;
+}
+    </style>
+
+</head>
+<body></body>
+</html>
