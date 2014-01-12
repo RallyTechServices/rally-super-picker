@@ -87,10 +87,20 @@ Ext.define('CustomApp', {
                         project.set("_selected", false);
                     }
                 });
+                me._sendMessage(projects);
                 deferred.resolve(projects);
             }
         });
         return deferred.promise;
+    },
+    _sendMessage: function(projects) {
+        var selected_project_oids = [];
+        Ext.Array.each(projects, function(project){
+            if ( project.get("_selected") ) {
+                selected_project_oids.push(project);
+            }
+        });
+        this.publish(this.setting_key, selected_project_oids);
     },
     _displayProjects: function(projects){
         var me = this;
@@ -106,8 +116,6 @@ Ext.define('CustomApp', {
                 source_data.push(project);
             }
         });
-        
-
         
         var source_store = Ext.create('Rally.data.custom.Store',{
             groupField: '_credittype',
@@ -179,7 +187,7 @@ Ext.define('CustomApp', {
             }
             me.logger.log(project.get('Name'),project.get('ObjectID'),project.get('_selected'));
         });
-        
+        me._sendMessage(this.project_set);
         me.logger.log('--', selected_array);
         
         var settings = {};
