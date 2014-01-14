@@ -160,7 +160,7 @@ Ext.define('CustomApp', {
             showRowActionsColumn: false,
             showPagingToolbar: false,
             columnCfgs: [
-                { text: 'Unelected Projects', dataIndex: 'Name' }
+                { text: 'Available Projects', dataIndex: 'Name' }
             ],
             viewConfig: {
                 plugins: {
