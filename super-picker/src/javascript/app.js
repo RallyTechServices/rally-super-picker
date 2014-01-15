@@ -55,6 +55,7 @@ Ext.define('CustomApp', {
                 model: 'Preference',
                 autoLoad: true,
                 filters: [{property:"Name",value:this.type_key}],
+                limit:'Infinity',
                 listeners:{
                     scope: this,
                     load: function(store,prefs) {
@@ -138,7 +139,8 @@ Ext.define('CustomApp', {
         
         this.source_store = Ext.create('Rally.data.custom.Store',{
             groupField: me.type_field_name,
-            data:source_data
+            data:source_data,
+            pageSize:3000
         });
         
         var target_store = Ext.create('Rally.data.custom.Store',{

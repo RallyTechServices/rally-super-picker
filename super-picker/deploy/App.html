@@ -3,11 +3,11 @@
 <head>
     <title>Super Picker</title>
     <!--  (c) 2013 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Tue Jan 14 2014 20:35:50 GMT-0800 (PST) -->
+    <!--  Build Date: Wed Jan 15 2014 09:15:22 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Tue Jan 14 2014 20:35:50 GMT-0800 (PST)";
-        var CHECKSUM = 6271262786;
+        var APP_BUILD_DATE = "Wed Jan 15 2014 09:15:22 GMT-0800 (PST)";
+        var CHECKSUM = 6347976282;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -161,6 +161,7 @@ Ext.define('CustomApp', {
             model:'Project',
             autoLoad: true,
             fetch:['ObjectID','Children','Name'],
+            limit:'Infinity',
             listeners: {
                 load: function(store,projects) {
                     var leaf_projects = [];
@@ -193,6 +194,7 @@ Ext.define('CustomApp', {
                 model: 'Preference',
                 autoLoad: true,
                 filters: [{property:"Name",value:this.type_key}],
+                limit:'Infinity',
                 listeners:{
                     scope: this,
                     load: function(store,prefs) {
@@ -276,7 +278,8 @@ Ext.define('CustomApp', {
         
         this.source_store = Ext.create('Rally.data.custom.Store',{
             groupField: me.type_field_name,
-            data:source_data
+            data:source_data,
+            pageSize:3000
         });
         
         var target_store = Ext.create('Rally.data.custom.Store',{
