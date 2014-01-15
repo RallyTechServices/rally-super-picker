@@ -15,6 +15,7 @@ Ext.define('CustomApp', {
         var deferred = Ext.create('Deft.Deferred');
         Ext.create('Rally.data.wsapi.Store',{
             model:'Project',
+            limit:'Infinity',
             autoLoad: true,
             fetch:['ObjectID','Children','Name'],
             listeners: {
@@ -44,10 +45,11 @@ Ext.define('CustomApp', {
             model: 'Preference',
             autoLoad: true,
             filters: [{property:"Name",value:this.key}],
+            limit:'Infinity',
             listeners:{
                 scope: this,
                 load: function(store,prefs) {
-                    this.logger.log(prefs);
+                    this.logger.log("existing preferences",prefs);
                     Ext.Array.each( prefs, function(pref){
                         var pref_project_oid = pref.get('Project').ObjectID;
                         if ( project_hash[pref_project_oid] ) {
@@ -68,8 +70,12 @@ Ext.define('CustomApp', {
             data.push(project); 
         });
         
+        this.logger.log("Number of Projects for table ",data.length);
+        
         var store = Ext.create('Rally.data.custom.Store',{
-            data:data
+            data:data,
+            limit:'Infinity',
+            pageSize:3000
         });
                     
         var typebox = this._getTypeBox();
@@ -78,6 +84,7 @@ Ext.define('CustomApp', {
             xtype:'rallygrid',
             store: store,
             showRowActionsColumn: false,
+            showPagingToolbar: false,
             columnCfgs: [
                 { text: 'Project', dataIndex: 'Name' },
                 { text: 'Type', dataIndex: '_credittype', editor: typebox  }

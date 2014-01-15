@@ -22,6 +22,7 @@ Ext.define('CustomApp', {
             model:'Project',
             autoLoad: true,
             fetch:['ObjectID','Children','Name'],
+            limit:'Infinity',
             listeners: {
                 load: function(store,projects) {
                     var leaf_projects = [];

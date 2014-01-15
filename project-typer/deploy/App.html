@@ -3,11 +3,11 @@
 <head>
     <title>Project Typer</title>
     <!--  (c) 2013 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Sun Jan 05 2014 16:22:34 GMT-0800 (PST) -->
+    <!--  Build Date: Wed Jan 15 2014 09:09:19 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Sun Jan 05 2014 16:22:34 GMT-0800 (PST)";
-        var CHECKSUM = 2519768161;
+        var APP_BUILD_DATE = "Wed Jan 15 2014 09:09:19 GMT-0800 (PST)";
+        var CHECKSUM = 2667496313;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -154,6 +154,7 @@ Ext.define('CustomApp', {
         var deferred = Ext.create('Deft.Deferred');
         Ext.create('Rally.data.wsapi.Store',{
             model:'Project',
+            limit:'Infinity',
             autoLoad: true,
             fetch:['ObjectID','Children','Name'],
             listeners: {
@@ -183,10 +184,11 @@ Ext.define('CustomApp', {
             model: 'Preference',
             autoLoad: true,
             filters: [{property:"Name",value:this.key}],
+            limit:'Infinity',
             listeners:{
                 scope: this,
                 load: function(store,prefs) {
-                    this.logger.log(prefs);
+                    this.logger.log("existing preferences",prefs);
                     Ext.Array.each( prefs, function(pref){
                         var pref_project_oid = pref.get('Project').ObjectID;
                         if ( project_hash[pref_project_oid] ) {
@@ -207,8 +209,12 @@ Ext.define('CustomApp', {
             data.push(project); 
         });
         
+        this.logger.log("Number of Projects for table ",data.length);
+        
         var store = Ext.create('Rally.data.custom.Store',{
-            data:data
+            data:data,
+            limit:'Infinity',
+            pageSize:3000
         });
                     
         var typebox = this._getTypeBox();
@@ -217,6 +223,7 @@ Ext.define('CustomApp', {
             xtype:'rallygrid',
             store: store,
             showRowActionsColumn: false,
+            showPagingToolbar: false,
             columnCfgs: [
                 { text: 'Project', dataIndex: 'Name' },
                 { text: 'Type', dataIndex: '_credittype', editor: typebox  }
