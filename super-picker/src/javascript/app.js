@@ -3,11 +3,12 @@ Ext.define('CustomApp', {
     componentCls: 'app',
     type_key: 'rally.techservices.projecttype',
     setting_key: 'rally.techservices.projectselection',
+    type_field_name: '_credittype',
     logger: new Rally.technicalservices.Logger(),
     items: [
-        {xtype:'container',itemId:'outer_box', defaults: { margin: 5, padding: 5 }, layout: 'hbox', items: [
-            {xtype:'container',itemId:'source_box', height: 400, width: 150},
-            {xtype:'container',itemId:'target_box', height: 400, width: 150}
+        {xtype:'container',itemId:'outer_box', autoScroll: true, height: 400, defaults: { margin: 5, padding: 5 }, layout: 'hbox', items: [
+            {xtype:'container',itemId:'source_box',  width: 150},
+            {xtype:'container',itemId:'target_box',  width: 150}
         ]},
         {xtype:'tsinfolink'}
     ],
@@ -37,35 +38,52 @@ Ext.define('CustomApp', {
     },
     _getProjectTypes: function(projects){
         var me = this;
+        this.logger.log("_getProjectTypes",projects);
         var deferred = Ext.create('Deft.Deferred');
         var project_hash = {}; // key will be oid
         var filtered_projects = [];
         Ext.Array.each(projects,function(project){
-            project.set("_credittype","None");
+            project.set(me.type_field_name,"None");
             project_hash[project.get('ObjectID')] = project;
         });
         
-        Ext.create('Rally.data.wsapi.Store',{
-            model: 'Preference',
-            autoLoad: true,
-            filters: [{property:"Name",value:this.type_key}],
-            listeners:{
-                scope: this,
-                load: function(store,prefs) {
-                    Ext.Array.each( prefs, function(pref){
-                        var pref_project_oid = pref.get('Project').ObjectID;
-                        if ( project_hash[pref_project_oid] ) {
-                            var project = project_hash[pref_project_oid];
-                            project.set('_credittype',pref.get('Value'));
-                            if ( pref.get('Value') !== "None" ) {
-                                filtered_projects.push(project);
+        // this is for development ease
+        if ( this.getAppId() ) {
+            this.logger.log("inside Rally");
+            Ext.create('Rally.data.wsapi.Store',{
+                model: 'Preference',
+                autoLoad: true,
+                filters: [{property:"Name",value:this.type_key}],
+                listeners:{
+                    scope: this,
+                    load: function(store,prefs) {
+                        Ext.Array.each( prefs, function(pref){
+                            var pref_project_oid = pref.get('Project').ObjectID;
+                            if ( project_hash[pref_project_oid] ) {
+                                var project = project_hash[pref_project_oid];
+                                project.set(me.type_field_name,pref.get('Value'));
+                                if ( pref.get('Value') !== "None" ) {
+                                    filtered_projects.push(project);
+                                }
                             }
-                        }
-                    });
-                    deferred.resolve(filtered_projects);
+                        });
+                        deferred.resolve(filtered_projects);
+                    }
                 }
-            }
-        });
+            });
+        } else {
+            this.logger.log("Outside Rally");
+            var counter = 1;
+            Ext.Array.each(projects,function(project){
+                if ( counter % 2 === 0 ) {
+                    project.set(me.type_field_name,"Type A");
+                } else {
+                    project.set(me.type_field_name,"Type B");
+                }
+                counter++;
+            });
+            deferred.resolve(projects);
+        }
         
         return deferred.promise;
     },
@@ -82,9 +100,9 @@ Ext.define('CustomApp', {
                 }
                 Ext.Array.each(projects,function(project){
                     if ( Ext.Array.indexOf(selected_oids,project.get('ObjectID')) > -1 ) {
-                        project.set("_selected", true);
+                        me._setSelected(project, true);
                     } else { 
-                        project.set("_selected", false);
+                        me._setSelected(project, false);
                     }
                 });
                 me._sendMessage(projects);
@@ -117,8 +135,8 @@ Ext.define('CustomApp', {
             }
         });
         
-        var source_store = Ext.create('Rally.data.custom.Store',{
-            groupField: '_credittype',
+        this.source_store = Ext.create('Rally.data.custom.Store',{
+            groupField: me.type_field_name,
             data:source_data
         });
         
@@ -142,17 +160,15 @@ Ext.define('CustomApp', {
                 },
                 listeners: {
                     drop: function(node, data, dropRec, dropPosition) {
-                        //var dropOn = dropRec ? ' ' + dropPosition + ' ' + dropRec.get('Name') : ' on empty view';
-                        //alert( 'Dropped ' + data.records[0].get('Name') + dropOn);
                         me._setSelected(data.records[0], true);
                     }
                 }
             }
         }); 
         
-        this.down('#source_box').add({
+        this.grid = this.down('#source_box').add({
             xtype:'rallygrid',
-            store: source_store,
+            store: this.source_store,
             features: [{
                 ftype:'grouping',
                 groupHeaderTpl: '{name}'
@@ -170,6 +186,11 @@ Ext.define('CustomApp', {
                 },
                 listeners: {
                     drop: function(node, data, dropRec, dropPosition) {
+//                        var dropOn = dropRec ? ' ' + dropPosition + ' ' + dropRec.get('Name') : ' on empty view';
+//                        me.logger.log('dropRec',dropRec);
+//                        me.logger.log('dropPosition',dropPosition);
+//                        me.logger.log('node',node);
+//                        me.logger.log( 'Dropped ' + data.records[0].get(me.type_field_name) + dropOn);
                         me._setSelected(data.records[0], false);
                     }
                 }
@@ -180,12 +201,21 @@ Ext.define('CustomApp', {
         var me = this;
         record.set("_selected",selected);
         
+        if ( this.source_store ) {
+            this.logger.log("setting selected",record,record.get('ObjectID'),selected);
+//            this.source_store.clearFilter(true);
+//            var item = this.source_store.findRecord("ObjectID",record.get('ObjectID'));
+//            this.source_store.filter({property:'_selected',value:false});
+//            if ( item ) {
+//                item.set("_selected",selected);
+//            }
+        }
+        
         var selected_array = [];
         Ext.Array.each(this.project_set, function(project){
             if ( project.get('_selected') ) {
                 selected_array.push(project.get('ObjectID'));
             }
-            me.logger.log(project.get('Name'),project.get('ObjectID'),project.get('_selected'));
         });
         me._sendMessage(this.project_set);
         me.logger.log('--', selected_array);
