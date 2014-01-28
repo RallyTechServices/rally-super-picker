@@ -3,6 +3,7 @@ Ext.define('CustomApp', {
     componentCls: 'app',
     setting_key: 'rally.techservices.projectselection',
     project_names: [],
+    tag_oids: [],
     logger: new Rally.technicalservices.Logger(),
     defaults: {
         padding: 5,
@@ -26,21 +27,25 @@ Ext.define('CustomApp', {
     },
     _onSettingUpdate: function(selected_projects) {
         var me = this;
-        this.logger.log("updated",selected_projects);
+        this.logger.log("received update ",selected_projects);
         this.project_names = [];
         Ext.Array.each(selected_projects,function(project){
             me.project_names.push(project.get("Name"));
         });
-        this._addReleaseBox(selected_projects);
+        this._addSelectors(selected_projects);
         //this.down('#message_box').update({msg: me.project_names.join(', ')});
     },
     _addSelectors: function(selected_projects){
-        var release_picker = this._addReleaseBox(selected_projects);
-
+        this.logger.log("_addSelectors");
         this.tag_oids = [];
+        this.logger.log("adding tag picker");
         var tag_picker = this._addTagBox();
+        
+        this.logger.log("adding release_picker");
+        var release_picker = this._addReleaseBox(selected_projects);
+        
         // adding change after the fact because we don't want it to fire
-        // before the release_box exists
+        // before both choosers exist
         tag_picker.on('blur',function(tb) {
                 var me = this;
                 this.logger.log("blur tags",tb.getValue());
@@ -53,6 +58,18 @@ Ext.define('CustomApp', {
             },
             this
         );
+        
+        release_picker.on('change',function(rb,new_value,old_value) {
+                this.logger.log("change",rb.getRecord());
+                if ( this.chart ) { this.chart.destroy(); }
+                this._getScopedReleases(rb.getRecord(),selected_projects);
+            },
+            this
+        );
+        
+        if ( release_picker.getRecord() ) {
+            this._getScopedReleases(release_picker.getRecord(),selected_projects);
+        }
         
     },
     _addTagBox: function() {
@@ -77,15 +94,7 @@ Ext.define('CustomApp', {
             labelWidth: 45,
             stateId:'ts_super_releaseburndown_release',
             stateEvents:'change',
-            stateful: true,
-            listeners: {
-                scope: this,
-                change: function(rb,new_value,old_value) {
-                    this.logger.log("change",rb.getRecord());
-                    if ( this.chart ) { this.chart.destroy(); }
-                    this._getScopedReleases(rb.getRecord(),selected_projects);
-                }
-            }
+            stateful: true
         });
     },
     _getScopedReleases: function(release,selected_projects) {        
