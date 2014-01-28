@@ -10,7 +10,10 @@ Ext.define('CustomApp', {
     },
     items: [
         {xtype:'container',itemId:'message_box',tpl:'<tpl>{msg}</tpl>'},
-        {xtype:'container',itemId:'release_box'},
+        {xtype:'container',layout:{type:'hbox'},defaults: { margin: 5 }, items:[
+            {xtype:'container',itemId:'release_box'},
+            {xtype:'container',itemId:'tag_box'}
+        ]},
         {xtype:'container',itemId:'chart_box'},
         {xtype:'tsinfolink'}
     ],
@@ -18,7 +21,7 @@ Ext.define('CustomApp', {
         this.down('#message_box').update({msg:'Waiting for settings...'});
         this.subscribe(this, this.setting_key, this._onSettingUpdate, this);
         if ( ! window.top.Rally.alm ) {
-            this._addReleaseBox([this.getContext().getProject()]);
+            this._addSelectors([this.getContext().getProject()]);
         }
     },
     _onSettingUpdate: function(selected_projects) {
@@ -31,15 +34,48 @@ Ext.define('CustomApp', {
         this._addReleaseBox(selected_projects);
         //this.down('#message_box').update({msg: me.project_names.join(', ')});
     },
+    _addSelectors: function(selected_projects){
+        var release_picker = this._addReleaseBox(selected_projects);
+
+        this.tag_oids = [];
+        var tag_picker = this._addTagBox();
+        // adding change after the fact because we don't want it to fire
+        // before the release_box exists
+        tag_picker.on('blur',function(tb) {
+                var me = this;
+                this.logger.log("blur tags",tb.getValue());
+                this.tag_oids = [];
+                if ( this.chart ) { this.chart.destroy(); }
+                Ext.Array.each(tb.getValue(), function(tag){
+                    me.tag_oids.push(tag.get('ObjectID'));
+                });
+                this._getScopedReleases(release_picker.getRecord(),selected_projects);
+            },
+            this
+        );
+        
+    },
+    _addTagBox: function() {
+        this.down('#tag_box').removeAll();
+        return this.down('#tag_box').add({
+            xtype: 'rallytagpicker',
+            autoExpand: false,
+            labelWidth: 35,
+            fieldLabel: 'Tag(s)',
+            stateId:'ts_super_releaseburndown_tags',
+            stateEvents:'change',
+            stateful: true
+        });
+    },
     _addReleaseBox: function(selected_projects) {
         this.down('#release_box').removeAll();
         this.down('#message_box').update();
         
-        this.down('#release_box').add({
+        return this.down('#release_box').add({
             xtype:'rallyreleasecombobox',
             fieldLabel:'Release:',
             labelWidth: 45,
-            stateId:'ts_super_releaseburndown',
+            stateId:'ts_super_releaseburndown_release',
             stateEvents:'change',
             stateful: true,
             listeners: {
@@ -107,7 +143,13 @@ Ext.define('CustomApp', {
         if ( this.chart ) { this.chart.destroy(); }
 
         var project_names = this.project_names.join(',');
-        
+        var filters = [
+            { property:'_TypeHierarchy',operator:'in',value:['HierarchicalRequirement'] },
+            { property:'Release',operator:'in',value:release_oids }
+        ];
+        if ( this.tag_oids.length > 0 ) {
+            filters.push({property:'Tags',operator:'in',value:this.tag_oids});
+        }
         this.chart = Ext.create('Rally.ui.chart.Chart', {
             storeType: 'Rally.data.lookback.SnapshotStore',
             calculatorType: 'Rally.technicalservices.calculator.BurnUp',
@@ -116,10 +158,7 @@ Ext.define('CustomApp', {
                 startDate: start_date
             },
             storeConfig: {
-               filters: [
-                { property:'_TypeHierarchy',operator:'in',value:['HierarchicalRequirement'] },
-                { property:'Release',operator:'in',value:release_oids }
-               ],
+               filters: filters,
                fetch: ['ScheduleState', 'PlanEstimate'],
                hydrate: ['ScheduleState'],
                sort: {
